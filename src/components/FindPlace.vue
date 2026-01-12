@@ -1,8 +1,8 @@
 <template>
 <div class='find-place' :class='{centered: boxInTheMiddle }'>
   <div v-if='boxInTheMiddle'>
-    <h3 class='site-header'>city roads</h3>
-    <p class='description'>This website renders every single road within a city</p>
+    <h3 class='site-header'>City Heart</h3>
+    <p class='description'>Visualize every single road within a city</p>
   </div>
   <form v-on:submit.prevent="onSubmit" class='search-box'>
       <input class='query-input' v-model='enteredInput' type='text' placeholder='Enter a city name to start' ref='input'>
@@ -39,7 +39,6 @@
     <div>Sorry, we were not able to download data from the OpenStreetMap.
     It could be very busy at the moment processing other requests. <br/><br/> Please bookmark this website and <a href='#' @click.prevent="retry">try again</a> later?</div>
     <div class='error-links'>
-      <a href='https://twitter.com/anvaka/status/1218971717734789120' title='see what it supposed to do' target="_blank">see how it should have worked</a>
       <a :href='getBugReportURL(error)' :title='"report error: " + error' target='_blank'>report this bug</a>
     </div>
   </div>
@@ -160,7 +159,7 @@ export default {
           error.toString() + '\n```\n\n Can you please help?';
       }
 
-      return `https://github.com/anvaka/city-roads/issues/new?title=${title}&body=${encodeURIComponent(body)}`
+      return `https://github.com/kylesantiago/city-heart/issues/new?title=${title}&body=${encodeURIComponent(body)}`
     },
 
     updateProgress(status) {

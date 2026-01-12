@@ -2,7 +2,7 @@
 
 *This is work in progress and subject to change. Please don't rely on it for anything critical* 
 
-The `city-roads` provides additional set of operations for the software engineers, allowing them
+City Heart provides an additional set of operations for software engineers, allowing them
 to execute arbitrary OpenStreetMap queries and visualize results.
 
 ## Methods
@@ -16,8 +16,7 @@ it takes to render Tokyo and Seattle next to each other.
 
 ![Tokyo and Seattle](./images/tokyo_and_seattle.png)
 
-First, open [city roads](https://anvaka.github.io/city-roads/)
-and load `Seattle` roads. Then open [developer console](https://developers.google.com/web/tools/chrome-devtools/open) and run the following command:
+First, open City Heart in your browser and load `Seattle` roads. Then open the [developer console](https://developers.google.com/web/tools/chrome-devtools/open) and run the following command:
 
 ``` js
 scene.load(Query.Road, 'Tokyo'); // load every single road in Tokyo

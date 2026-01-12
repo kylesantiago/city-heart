@@ -1,63 +1,53 @@
-# city-roads
+# City Heart
 
-Render every single road in any city at once: https://anvaka.github.io/city-roads/
+A visualization tool that renders every single road in any city at once, creating beautiful map art from OpenStreetMap data.
 
 ![demo](https://i.imgur.com/6bFhX3e.png)
 
-## How it is made?
+## How it Works
 
-The data is fetched from OpenStreetMap using [overpass API](http://overpass-turbo.eu/). While that API
-is free (as long as you follow ODbL licenses), it can be rate-limited and sometimes it is slow. After all
-we are downloading thousands of roads within an area!
+The application fetches road data from OpenStreetMap using the [Overpass API](http://overpass-turbo.eu/). The API is free to use under ODbL licenses, though it can be rate-limited during heavy use.
 
-To improve the performance of download, I indexed ~3,000 cities with population larger than 100,000 people and
-stored into a [very simple](https://github.com/anvaka/index-large-cities/blob/master/proto/place.proto) protobuf format. The cities are stored into a cache in this github [repository](https://github.com/anvaka/index-large-cities).
+Location search is powered by [Nominatim](https://nominatim.openstreetmap.org/), which converts place names into OpenStreetMap area IDs that are then used to query road data.
 
-The name resolution is done by [nominatim](https://nominatim.openstreetmap.org/) - for any query that you type
-into the search box it returns list of area ids. I check for the area id in my list of cached cities first,
-and fallback to overpass if area is not present in cache.
+## Features
 
-## Scripting
-
-Behind simple UI software engineers would also find scripting capabilities. You can develop programs on top
-of the city-roads. A few examples are available in [city-script](https://github.com/anvaka/city-script). Scene
-API is documented here: https://github.com/anvaka/city-roads/blob/main/API.md
-
-Please share your creations and do not hesitate to reach out if you have any questions.
+- Search any city or location by name
+- Visualize all roads in the selected area
+- Customize colors and styling
+- Export high-resolution images
+- Scripting API for advanced customization (see API.md)
 
 ## Limitations
 
-The rendering of the city is limited by the browser and video card memory capacity. I was able to render Seattle
-roads without a hiccup on a very old samsung phone, though when I tried Tokyo (with 1.4m segments) the phone
-was very slow.
+Rendering is limited by browser and GPU memory:
+- Most cities render without issues
+- Very large areas (like entire US states) may cause performance issues or crashes
+- Mobile devices may struggle with cities containing over 1 million road segments
 
-Selecting area that has millions of roads (e.g. a Washington state) may cause the page to crash even on a
-powerful device.
+## Technical Stack
 
-Luckily, most of the cities can be rendered without problems, resulting in a beautiful art.
+- Vue.js 3
+- WebGL for rendering
+- OpenStreetMap data via Overpass API
+- Nominatim for geocoding
 
-## Support
+## Local Development
 
-If you like this work and want to use it in your projects - you are more than welcome to do so!
-
-Please [let me](https://twitter.com/anvaka) know how it goes. You can also sponsor my projects [here](https://github.com/sponsors/anvaka) - your funds will be dedicated to more awesome and free data visualizations.
-
-## Local development
-
-``` bash
-# install dependencies
+```bash
+# Install dependencies
 npm install
 
-# serve with hot reload at localhost:8080
+# Run development server at localhost:5173
 npm run dev
 
-# build for production with minification
+# Build for production
 npm run build
-
-# build for production and view the bundle analyzer report
-npm run build --report
 ```
 
 ## License
 
-The source code is licensed under MIT license
+The source code is licensed under MIT license.
+
+Original city-roads project by [Andrei Kashcha](https://github.com/anvaka/city-roads).
+

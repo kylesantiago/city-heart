@@ -57,13 +57,11 @@
 
         <h3>About</h3>
         <div>
-          <p>This website was created by <a href='https://twitter.com/anvaka' target='_blank'>@anvaka</a>.
-          It downloads roads from OpenStreetMap and renders them with WebGL.
+          <p>This website downloads roads from OpenStreetMap and renders them with WebGL.
           </p>
           <p>
-           You can find the entire <a href='https://github.com/anvaka/city-roads'>source code here</a>. 
-           If you love this website you can also <a href='https://www.paypal.com/paypalme2/anvakos/3'>buy me a coffee</a> or 
-           <a href='https://www.patreon.com/anvaka'>support me on Patreon</a>, but you don't have to.
+           Based on the original <a href='https://github.com/anvaka/city-roads'>city-roads</a> project.
+           Source code available on <a href='https://github.com/kylesantiago/city-heart'>GitHub</a>.
           </p>
         </div>
       </div>
