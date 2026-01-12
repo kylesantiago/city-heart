@@ -6,6 +6,7 @@
         <a href="#" class='print-button' @click.prevent='toggleSettings'>Customize...</a>
         <a href="#" class='try-another' @click.prevent='startOver'>Try another city</a>
       </div>
+      
       <div v-if='showSettings' class='print-window'>
         <h3>Display</h3>
         <div class='row'>
@@ -19,12 +20,6 @@
         </div>
 
         <h3>Export</h3>
-        <div class='row'>
-          <a href='#' @click.prevent='zazzleMugPrint()' class='col'>Onto a mug</a> 
-          <span class='col c-2'>
-            Print what you see onto a mug. <br/>Get a unique gift of your favorite city.
-          </span>
-        </div>
         <div class='preview-actions message' v-if='zazzleLink || generatingPreview'>
             <div v-if='zazzleLink' class='padded popup-help'>
               If your browser has blocked the new window, <br/>please <a :href='zazzleLink' target='_blank'>click here</a>
@@ -68,6 +63,16 @@
     </div>
   </div>
 
+  <!-- Rotation controls always visible on map -->
+  <div v-if='placeFound' class='rotation-control-panel'>
+    <div class='rotation-controls'>
+      <label class='rotation-label'>Rotate</label>
+      <input type='range' v-model.number='rotation' @input='updateRotation' min='0' max='360' step='0.01' class='rotation-slider' />
+      <span class='rotation-value'>{{Math.round(rotation)}}°</span>
+      <button @click='resetRotation' class='reset-btn' title='Reset rotation'>↻</button>
+    </div>
+  </div>
+
   <editable-label v-if='placeFound' v-model='name' class='city-name' :printable='true' :style='{color: labelColorRGBA}' :overlay-manager='overlayManager'></editable-label>
   <div v-if='placeFound' class='license printable can-drag' :style='{color: labelColorRGBA}'>data <a href='https://www.openstreetmap.org/about/' target="_blank" :style='{color: labelColorRGBA}'>© OpenStreetMap</a></div>
 </template>
@@ -79,7 +84,6 @@ import EditableLabel from './components/EditableLabel.vue';
 import ColorPicker from './components/ColorPicker.vue';
 import createScene from './lib/createScene.js';
 import GridLayer from './lib/GridLayer.js';
-import generateZazzleLink from './lib/getZazzleLink.js';
 import appState from './lib/appState.js';
 import {getPrintableCanvas, getCanvas} from './lib/saveFile.js';
 import config from './config.js';
@@ -114,7 +118,8 @@ export default {
       settingsOpen: false,
       labelColor: config.getLabelColor().toRgb(),
       backgroundColor: config.getBackgroundColor().toRgb(),
-      layers: []
+      layers: [],
+      rotation: 0
     }
   },
   computed: {
@@ -191,6 +196,31 @@ export default {
 
       document.body.style.backgroundColor = config.getBackgroundColor().toRgbString();
       getCanvas().style.visibility = 'hidden';
+      this.rotation = 0;
+    },
+
+    updateRotation() {
+      if (!this.scene) return;
+      const renderer = this.scene.getRenderer();
+      
+      // Convert degrees to radians
+      const angleInRadians = (this.rotation * Math.PI) / 180;
+      
+      // Get all grid layers and apply rotation
+      const layers = this.scene.queryLayerAll();
+      layers.forEach(layer => {
+        if (layer.rotate) {
+          layer.rotate(angleInRadians);
+        }
+      });
+      
+      renderer.renderFrame(true);
+      this.zazzleLink = null;
+    },
+
+    resetRotation() {
+      this.rotation = 0;
+      this.updateRotation();
     },
 
     toPNGFile(e) {
@@ -253,27 +283,6 @@ export default {
       this.scene.background = c;
       document.body.style.backgroundColor = toRGBA(c);
       this.zazzleLink = null;
-    },
-
-    zazzleMugPrint() {
-      if (this.zazzleLink) {
-        window.open(this.zazzleLink, '_blank');
-        recordOpenClick(this.zazzleLink);
-        return;
-      }
-
-      this.generatingPreview = true;
-      getPrintableCanvas(this.scene).then(printableCanvas => {
-        generateZazzleLink(printableCanvas).then(link => {
-          this.zazzleLink = link;
-          window.open(link, '_blank');
-          recordOpenClick(link);
-          this.generatingPreview = false;
-        }).catch(e => {
-          this.error = e;
-          this.generatingPreview = false;
-        });
-      });
     }
   }
 }
@@ -391,6 +400,139 @@ function recordOpenClick(link) {
   }
 }
 
+.rotation-control-panel {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 10;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.rotation-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  .rotation-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+  }
+  
+  .rotation-slider {
+    width: 200px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #e0e0e0 0%, #e0e0e0 100%);
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: background 0.2s;
+    
+    &:hover {
+      background: linear-gradient(to right, #d0d0d0 0%, #d0d0d0 100%);
+    }
+    
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: highlight-color;
+      cursor: grab;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: all 0.2s;
+      
+      &:hover {
+        background: emphasis-background;
+        transform: scale(1.1);
+      }
+      
+      &:active {
+        cursor: grabbing;
+        transform: scale(0.95);
+      }
+    }
+    
+    &::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: highlight-color;
+      cursor: grab;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: all 0.2s;
+      
+      &:hover {
+        background: emphasis-background;
+        transform: scale(1.1);
+      }
+      
+      &:active {
+        cursor: grabbing;
+        transform: scale(0.95);
+      }
+    }
+    
+    &::-moz-range-track {
+      background: #e0e0e0;
+      border-radius: 4px;
+      height: 8px;
+    }
+  }
+  
+  .rotation-value {
+    font-size: 13px;
+    min-width: 35px;
+    text-align: right;
+    font-family: monospace;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .reset-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: white;
+    border: 1px solid #d0d0d0;
+    color: #666;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+    
+    &:hover {
+      background: highlight-color;
+      color: white;
+      border-color: highlight-color;
+      transform: rotate(-180deg);
+    }
+    
+    &:active {
+      transform: rotate(-180deg) scale(0.9);
+    }
+    
+    &:focus {
+      outline: 2px solid highlight-color;
+      outline-offset: 2px;
+    }
+  }
+}
+
 a {
   border: 1px solid transparent;
   margin: -1px;
@@ -490,6 +632,32 @@ a:focus {
     }
 
   }
+  
+  .rotation-control-panel {
+    bottom: 70px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    
+    .rotation-controls {
+      gap: 8px;
+      
+      .rotation-slider {
+        width: 120px;
+      }
+      
+      .rotation-label {
+        font-size: 12px;
+      }
+      
+      .rotation-value {
+        font-size: 12px;
+        min-width: 30px;
+      }
+    }
+  }
+  
   .city-name  {
     right: 8px;
     bottom: 24px;
