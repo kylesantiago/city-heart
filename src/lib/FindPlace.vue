@@ -5,7 +5,7 @@
     <p class='description'>Visualize every single road within a city</p>
   </div>
   <form v-on:submit.prevent="onSubmit" class='search-box'>
-      <input class='query-input' v-model='enteredInput' type='text' placeholder='Enter a city name or address' ref='input'>
+      <input class='query-input' v-model='enteredInput' type='text' placeholder='Enter a city name to start' ref='input'>
       <a type='submit' class='search-submit' href='#' @click.prevent='onSubmit' v-if='enteredInput && !hideInput'>{{mainActionText}}</a>
   </form>
   <div v-if='showWarning' class='prompt message note shadow'>
@@ -222,10 +222,6 @@ export default {
         var pbf = new Pbf(byteArray);
         var obj = place.read(pbf);
         let grid = Grid.fromPBF(obj)
-        // Store target location if available
-        if (suggestion.lat && suggestion.lon) {
-          grid.setTargetLocation(parseFloat(suggestion.lat), parseFloat(suggestion.lon));
-        }
         this.$emit('loaded', grid);
       });
     },
@@ -249,10 +245,6 @@ export default {
           grid.setId(suggestion.areaId || suggestion.osm_id);
           grid.setIsArea(suggestion.areaId); // osm nodes don't have area.
           grid.setBBox(serializeBBox(suggestion.bbox));
-          // Store target location if available
-          if (suggestion.lat && suggestion.lon) {
-            grid.setTargetLocation(parseFloat(suggestion.lat), parseFloat(suggestion.lon));
-          }
           this.$emit('loaded', grid);
         }
       }).catch(err => {

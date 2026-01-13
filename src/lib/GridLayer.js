@@ -1,6 +1,6 @@
 import config from '../config.js';
 import tinycolor from 'tinycolor2';
-import {WireCollection, PointCollection} from 'w-gl';
+import {WireCollection} from 'w-gl';
 
 let counter = 0;
 
@@ -35,7 +35,6 @@ export default class GridLayer {
     this._color = config.getDefaultLineColor();
     this.grid = null;
     this.lines = null;
-    this.marker = null; // For target location marker
     this.scene = null;
     this.dx = 0;
     this.dy = 0;
@@ -120,40 +119,10 @@ export default class GridLayer {
     this.lines = lines;
   }
 
-  buildMarker() {
-    if (this.marker || !this.grid || !this.grid.targetLocation) return null;
-
-    const {lat, lon} = this.grid.targetLocation;
-    const project = this.grid.getProjector();
-    const projected = project({lon, lat});
-
-    // Create a point collection with 1 point for the marker
-    let marker = new PointCollection(1, {
-      size: 20,
-      allowColors: true
-    });
-
-    marker.add({
-      x: projected.x,
-      y: projected.y,
-      z: 0,
-      color: {r: 1, g: 0, b: 0, a: 1} // Red color
-    });
-
-    marker.id = this.id + '_marker';
-    this.marker = marker;
-    return marker;
-  }
-
   destroy() {
-    if (!this.scene) return;
+    if (!this.scene || !this.lines) return;
 
-    if (this.lines) {
-      this.scene.removeChild(this.lines);
-    }
-    if (this.marker) {
-      this.scene.removeChild(this.marker);
-    }
+    this.scene.removeChild(this.lines);
   }
 
   bindToScene(scene) {
@@ -165,13 +134,9 @@ export default class GridLayer {
     if (!this.grid) return;
 
     this.buildLinesCollection();
-    this.buildMarker();
 
     if (this.hidden) return;
     this.scene.appendChild(this.lines);
-    if (this.marker) {
-      this.scene.appendChild(this.marker);
-    }
   }
 
   hide() {
@@ -180,9 +145,6 @@ export default class GridLayer {
     if (!this.scene || !this.grid) return;
 
     this.scene.removeChild(this.lines);
-    if (this.marker) {
-      this.scene.removeChild(this.marker);
-    }
   }
 
   show() {
@@ -194,9 +156,6 @@ export default class GridLayer {
     }
 
     this.scene.appendChild(this.lines);
-    if (this.marker) {
-      this.scene.appendChild(this.marker);
-    }
   }
 
   _transferTransform() {
@@ -228,34 +187,6 @@ export default class GridLayer {
     }
     
     this.lines.updateWorldTransform(true);
-    
-    // Apply same transformations to marker if it exists
-    if (this.marker) {
-      this.marker.model = [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-      ];
-      
-      if (this.angle !== 0) {
-        const cos = Math.cos(this.angle);
-        const sin = Math.sin(this.angle);
-        this.marker.model = [
-          cos, sin, 0, 0,
-          -sin, cos, 0, 0,
-          0, 0, 1, 0,
-          0, 0, 0, 1
-        ];
-      }
-      
-      if (this.dx !== 0 || this.dy !== 0) {
-        this.marker.translate([this.dx, this.dy, 0]);
-      }
-      
-      this.marker.updateWorldTransform(true);
-    }
-    
     if (this.scene) {
       this.scene.renderFrame(true);
     }

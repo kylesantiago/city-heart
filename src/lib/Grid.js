@@ -14,7 +14,6 @@ export default class Grid {
     this.name = '';
     this.isArea = true;
     this.projector = undefined;
-    this.targetLocation = null; // Store the target address coordinates {lat, lon}
   }
 
   setName(name) {
@@ -31,10 +30,6 @@ export default class Grid {
 
   setBBox(bboxString) {
     this.bboxString = bboxString;
-  }
-
-  setTargetLocation(lat, lon) {
-    this.targetLocation = {lat, lon};
   }
 
   hasRoads() {
