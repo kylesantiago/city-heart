@@ -2,511 +2,383 @@
 <div class='find-place' :class='{centered: boxInTheMiddle }'>
   <div v-if='boxInTheMiddle'>
     <h3 class='site-header'>City Heart</h3>
-    <p class='description'>Visualize every single road within a city</p>
+    <p class='description'>Visualize roads in any city or address</p>
   </div>
+  
   <form v-on:submit.prevent="onSubmit" class='search-box'>
-      <input class='query-input' v-model='enteredInput' type='text' placeholder='Enter a city name to start' ref='input'>
-      <a type='submit' class='search-submit' href='#' @click.prevent='onSubmit' v-if='enteredInput && !hideInput'>{{mainActionText}}</a>
+    <input 
+      class='query-input' 
+      v-model='enteredInput' 
+      type='text' 
+      placeholder='Enter a city name or address' 
+      ref='input'
+    >
+    <a 
+      type='submit' 
+      class='search-submit' 
+      href='#' 
+      @click.prevent='onSubmit' 
+      v-if='enteredInput && !hideInput'
+    >
+      Search
+    </a>
   </form>
-  <div v-if='showWarning' class='prompt message note shadow'>
-    Note: Large cities may require 200MB+ of data transfer and may need a powerful device to render.
-  </div>
+  
   <div class='results' v-if='!loading'>
     <div v-if='suggestionsLoaded && suggestions.length' class='suggestions shadow'>
       <div class='prompt message'>
-        <div>Select boundaries below to download all roads within</div>
-        <div class='note'>large cities may require 200MB+ of data transfer and a powerful device</div>
+        <div>Select a location to view its roads</div>
       </div>
       <ul>
         <li v-for='(suggestion, index) in suggestions' :key="index">
-          <a @click.prevent='pickSuggestion(suggestion)' class='suggestion'
-          href='#'>
-          <span>
-          {{suggestion.name}} <small>({{suggestion.type}})</small>
-          </span>
+          <a @click.prevent='pickSuggestion(suggestion)' class='suggestion' href='#'>
+            <span>{{ suggestion.name }}</span>
+            <small class='type-badge'>{{ suggestion.type }}</small>
           </a>
         </li>
       </ul>
     </div>
+    
     <div v-if='suggestionsLoaded && !suggestions.length && !loading && !error' class='no-results message shadow'>
-      Didn't find matching cities. Try a different query?
-    </div>
-    <div v-if='noRoads' class='no-results message shadow'>
-      Didn't find any roads. Try a different query?
+      No results found. Try a different search?
     </div>
   </div>
+  
   <div v-if='error' class='error message shadow'>
-    <div>Sorry, we were not able to download data from the OpenStreetMap.
-    It could be very busy at the moment processing other requests. <br/><br/> Please bookmark this website and <a href='#' @click.prevent="retry">try again</a> later?</div>
-    <div class='error-links'>
-      <a :href='getBugReportURL(error)' :title='"report error: " + error' target='_blank'>report this bug</a>
-    </div>
+    <div>{{ error }}</div>
   </div>
+  
   <div v-if='loading' class='loading message shadow'>
-    <loading-icon></loading-icon>
-    <span>{{loading}}</span>
-    <a href="#" @click.prevent='cancelRequest' class='cancel-request'>cancel</a>
-    <div class='load-padding' v-if='stillLoading > 0'>
-      Still loading...
-    </div>
-    <div class='load-padding' v-if='stillLoading > 1'>
-      Sorry it takes so long!
-    </div>
+    <div class='loading-spinner'></div>
+    <span>{{ loading }}</span>
   </div>
 </div>
 </template>
 
 <script>
-import LoadingIcon from './LoadingIcon.vue';
-import Query from '../lib/Query.js';
-import request from '../lib/request.js';
 import findBoundaryByName from '../lib/findBoundaryByName.js';
-import appState from '../lib/appState.js';
-import Grid from '../lib/Grid.js';
-import queryState from '../lib/appState.js';
-import config from '../config.js';
-import Progress from '../lib/Progress.js'
-import LoadOptions from '../lib/LoadOptions.js';
-import Pbf from 'pbf';
-import {place} from '../proto/place.js';
-
-const FIND_TEXT = 'Find City Bounds';
 
 export default {
   name: 'FindPlace',
-  components: {
-    LoadingIcon
-  },
-  data () {
-    const enteredInput = appState.get('q') || '';
-    let hasValidArea = restoreStateFromQueryString();
-
+  data() {
     return {
-      enteredInput,
-      loading: null,
-      lastCancel: null,
+      enteredInput: '',
+      suggestions: [],
       suggestionsLoaded: false,
-      boxInTheMiddle: true,
-      stillLoading: 0,
+      loading: null,
       error: null,
       hideInput: false,
-      noRoads: false,
-      clicked: false,
-      showWarning: hasValidArea, 
-      mainActionText: hasValidArea ? 'Download Area' : FIND_TEXT,
-      suggestions: []
-    }
-  },
-  watch: {
-    enteredInput() {
-      // As soon as they change it, we need not to download:
-      this.mainActionText = FIND_TEXT;
-      this.showWarning = false;
-      this.hideInput = false;
-      appState.unsetPlace();
-    }
+      boxInTheMiddle: true
+    };
   },
   mounted() {
     this.$refs.input.focus();
-    if (queryState.get('auto')) {
-      this.onSubmit();
-    }
-  },
-  beforeUnmount() {
-    if (this.lastCancel) this.lastCancel();
-    clearInterval(this.notifyStillLoading);
   },
   methods: {
     onSubmit() {
-      queryState.set('q', this.enteredInput);
-      this.cancelRequest()
+      if (!this.enteredInput.trim()) return;
+      
       this.suggestions = [];
-      this.noRoads = false;
-      this.error = false;
-      this.showWarning = false;
-
-      const restoredState = restoreStateFromQueryString(this.enteredInput);
-      if (restoredState) {
-        this.pickSuggestion(restoredState);
-        return;
-      }
-
-      this.loading = 'Searching cities that match your query...'
+      this.error = null;
+      this.loading = 'Searching...';
+      
       findBoundaryByName(this.enteredInput)
-        .then(suggestions => {
+        .then(results => {
           this.loading = null;
-          this.hideInput = suggestions && suggestions.length;
+          this.hideInput = results && results.length;
+          
           if (this.boxInTheMiddle) {
-            // let animation that moves input box proceed a bit
-            this.boxInTheMiddle = false; // This triggers transition
-            // wait for it and then set the suggestions:
+            this.boxInTheMiddle = false;
             setTimeout(() => {
               this.suggestionsLoaded = true;
-              this.suggestions = suggestions;
-            }, 50)
+              this.suggestions = results;
+            }, 50);
           } else {
-              this.suggestionsLoaded = true;
-              this.suggestions = suggestions; 
+            this.suggestionsLoaded = true;
+            this.suggestions = results;
           }
+        })
+        .catch(err => {
+          this.loading = null;
+          this.error = 'Failed to search. Please try again.';
+          console.error('Search error:', err);
         });
     },
-
-    getBugReportURL(error) {
-      let title = encodeURIComponent('OSM Error');
-      let body = '';
-      if (error) {
-        body = 'Hello, an error occurred on the website:\n\n```\n' +
-          error.toString() + '\n```\n\n Can you please help?';
+    
+    pickSuggestion(suggestion) {
+      console.log('=== PICK SUGGESTION ===');
+      console.log('Selected:', suggestion);
+      console.log('isAddress:', suggestion.isAddress);
+      console.log('isPlace:', suggestion.isPlace);
+      
+      // Check if this is an address
+      if (suggestion.isAddress) {
+        console.log('→ Handling as ADDRESS');
+        // Address selected - need to find the city first
+        this.loading = 'Finding city for address...';
+        this.handleAddressSelection(suggestion);
+      } else {
+        console.log('→ Handling as CITY/PLACE');
+        // City/place selected directly
+        this.emitLocation(suggestion);
       }
-
-      return `https://github.com/kylesantiago/city-heart/issues/new?title=${title}&body=${encodeURIComponent(body)}`
     },
-
-    updateProgress(status) {
-      this.stillLoading = 0;
-      clearInterval(this.notifyStillLoading);
-      if (status.loaded < 0) {
-        this.loading = 'Trying a different server'
-        this.restartLoadingMonitor();
+    
+    handleAddressSelection(addressSuggestion) {
+      console.log('=== HANDLE ADDRESS ===');
+      // Extract city name from the address
+      const cityName = addressSuggestion.cityName || this.extractCityFromName(addressSuggestion.name);
+      console.log('Extracted city name:', cityName);
+      
+      if (!cityName) {
+        console.log('→ No city found, showing address location');
+        // No city found, just show the address location
+        this.emitLocation(addressSuggestion, {
+          markerLng: addressSuggestion.lng,
+          markerLat: addressSuggestion.lat
+        });
         return;
       }
-      if (status.percent !== undefined) {
-        this.loading = 'Loaded ' + Math.round(100 * status.percent) + '% (' + formatNumber(status.loaded) + ' bytes)...';
-      } else {
-        this.loading = 'Loaded ' + formatNumber(status.loaded) + ' bytes...';
-      }
-    },
-
-    retry() {
-      if (this.lastSuggestion) {
-        this.pickSuggestion(this.lastSuggestion);
-      }
-    },
-
-    pickSuggestion(suggestion) {
-      this.lastSuggestion = suggestion;
-      this.error = false;
-      if (appState.isCacheEnabled() && suggestion.areaId) {
-        this.checkCache(suggestion)
-          .catch(error => {
-            if (error.cancelled) return; // no need to do anything. They've cancelled
-
-            // No Cache - fallback
-            return this.useOSM(suggestion);
-          });
-      } else {
-        // we don't have cache for nodes yet.
-        this.useOSM(suggestion);
-      }
-    },
-
-    restartLoadingMonitor() {
-      clearInterval(this.notifyStillLoading);
-      this.stillLoading = 0;
-      this.notifyStillLoading = setInterval(() => {
-        this.stillLoading++;
-      }, 10000);
-    },
-
-    checkCache(suggestion) {
-      this.loading = 'Checking cache...'
-      let areaId = suggestion.areaId;
-
-      return request(config.areaServer + '/' + areaId + '.pbf', {
-        progress: this.generateNewProgressToken(),
-        responseType: 'arraybuffer'
-      }).then(arrayBuffer => {
-        var byteArray = new Uint8Array(arrayBuffer);
-        return byteArray;
-      }).then(byteArray => {
-        var pbf = new Pbf(byteArray);
-        var obj = place.read(pbf);
-        let grid = Grid.fromPBF(obj)
-        this.$emit('loaded', grid);
-      });
-    },
-
-    useOSM(suggestion) {
-      this.loading = 'Connecting to OpenStreetMap...'
       
-      // it may take a while to load data. 
-      this.restartLoadingMonitor();
-      Query.runFromOptions(new LoadOptions({
-        wayFilter: Query.Road,
-        areaId: suggestion.areaId,
-        bbox: suggestion.bbox
-      }), this.generateNewProgressToken())
-      .then(grid => {
-        this.loading = null;
-        if (!grid.hasRoads()) {
-          this.noRoads = true;
-        } else {
-          grid.setName(suggestion.name);
-          grid.setId(suggestion.areaId || suggestion.osm_id);
-          grid.setIsArea(suggestion.areaId); // osm nodes don't have area.
-          grid.setBBox(serializeBBox(suggestion.bbox));
-          this.$emit('loaded', grid);
-        }
-      }).catch(err => {
-        if (err.cancelled) {
-          this.loading = null;
-          return;
-        }
-        console.error(err);
-        this.error = err;
-        this.loading = null;
-        this.suggestions = [];
-      })
-      .finally(() => {
-        clearInterval(this.notifyStillLoading);
-        this.stillLoading = 0;
-      });
+      console.log('→ Searching for city:', cityName);
+      // Search for the city
+      findBoundaryByName(cityName)
+        .then(cityResults => {
+          console.log('City search results:', cityResults);
+          // Find a place (not address) result
+          const city = cityResults.find(r => r.isPlace);
+          console.log('Found city:', city);
+          
+          if (city) {
+            console.log('→ Emitting city with marker');
+            // Emit city with marker at address
+            this.emitLocation(city, {
+              markerLng: addressSuggestion.lng,
+              markerLat: addressSuggestion.lat
+            });
+          } else {
+            console.log('→ No city found, showing address only');
+            // No city found, just show address
+            this.emitLocation(addressSuggestion, {
+              markerLng: addressSuggestion.lng,
+              markerLat: addressSuggestion.lat
+            });
+          }
+        })
+        .catch(err => {
+          console.error('City search failed:', err);
+          // Fallback: just show the address
+          this.emitLocation(addressSuggestion, {
+            markerLng: addressSuggestion.lng,
+            markerLat: addressSuggestion.lat
+          });
+        });
     },
-
-    cancelRequest() {
-      if (this.progressToken) {
-        this.progressToken.cancel();
-        this.progressToken = null;
-        this.loading = false;
-      }
+    
+    extractCityFromName(name) {
+      // Try to extract city from display name
+      // Format: "Address, City, Region, Country"
+      const parts = name.split(',').map(p => p.trim());
+      return parts.length >= 2 ? parts[1] : null;
     },
-
-    generateNewProgressToken() {
-      if (this.progressToken) {
-        this.progressToken.cancel();
-        this.progressToken = null;
-      }
-
-      this.progressToken = new Progress(this.updateProgress);
-      return this.progressToken;
+    
+    emitLocation(location, options = {}) {
+      console.log('=== EMIT LOCATION ===');
+      console.log('Location:', location);
+      console.log('Options:', options);
+      
+      this.loading = null;
+      
+      const payload = {
+        name: location.name,
+        lng: location.lng,
+        lat: location.lat,
+        bbox: location.bbox,
+        ...options
+      };
+      
+      console.log('Emitting payload:', payload);
+      this.$emit('loaded', payload);
     }
   }
-}
-
-function serializeBBox(bbox) {
-  return bbox && bbox.join(',');
-}
-
-function formatNumber(x) {
-  if (!Number.isFinite(x)) return 'N/A';
-  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-function restoreStateFromQueryString(name) {
-  let areaId = getCurrentAreaId();
-  if (areaId) {
-    return {name, areaId};
-  }
-
-  let nodeAndBox = getCurrentNodeAndBox();
-  if (nodeAndBox) {
-    return {
-      name,
-      osm_id: nodeAndBox.osm_id,
-      bbox: nodeAndBox.bbox
-    };
-  }
-}
-
-function getCurrentAreaId() {
-  let areaId = appState.get('areaId');
-  if (!Number.isFinite(Number.parseInt(areaId, 10))) {
-    areaId = null;
-  }
-  return areaId;
-}
-
-function getCurrentNodeAndBox() {
-  let osm_id = appState.get('osm_id');
-  if (!Number.isFinite(Number.parseInt(osm_id, 10))) return;
-
-  let bbox = parseBBox(appState.get('bbox'));
-  if (!bbox) return;
-
-  return { osm_id, bbox };
-}
-
-function parseBBox(bboxStr) {
-  if (!bboxStr) return null;
-
-  let bbox = bboxStr.split(',').map(x => Number.parseFloat(x)).filter(x => Number.isFinite(x));
-  return bbox.length === 4 ? bbox : null;
-}
-
+};
 </script>
 
-<style lang="stylus">
-@import('../vars.styl');
-.find-place  {
-  width: desktop-controls-width;
-}
-
-h3.site-header {
-  margin: 0;
-  font-weight: normal;
-  font-size: 32px;
-  text-align: center;
-}
-
-input {
-  border: none;
-  flex: 1;
-  font-family: 'Avenir', Helvetica, Arial, sans-serif;
-  padding: 0;
-  color: #434343;
-  height: 100%;
-  font-size: 16px;
-  &:focus {
-    outline: none;
-  }
-}
-
-.search-box {
-  position: relative;
-  background-color: emphasis-background;
-  padding: 0 8px;
-  padding: 0 0 0 8px;
-
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 -1px 0px rgba(0,0,0,0.02);
-  height: 48px;
-  display: flex;
-  font-size: 16px;
-  cursor: text;
-  a {
-    cursor: pointer;
-  }
-  span {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-}
-
-.prompt {
-  padding: 4px;
-  text-align: center;
-  font-size: 12px;
-}
-
-.search-submit {
-  padding: 0 8px;
-  align-items: center;
-  text-decoration: none;
-  display: flex;
-  flex-shrink: 0;
-  justify-content: center;
-  outline: none;
-  z-index: 1;
-  color: highlight-color
-  &:hover {
-    color: emphasis-background;
-    background: highlight-color;
-  }
-}
-
-.suggestion {
-  display: block
-  min-height: 64px
-  align-items: center;
-  border-bottom: 1px solid border-color
-  display: flex
-  padding: 0 10px;
-  text-decoration: none
-  color: highlight-color
-}
-
-.suggestions {
-  position: relative;
-  background: white
-  .note {
-    font-size: 10px;
-    font-style: italic;
-  }
-
-  ul {
-    list-style-type: none;
-    margin: 0;
-    padding: 0;
-    max-height: calc(100vh - 128px);
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-}
-
-.message,
-.loading {
-  padding: 4px 8px;
-  position: relative;
-}
-.loading svg {
-  margin-right: 8px;
-}
-
-.shadow {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2)
-}
-
-.error {
-  overflow-x: auto;
-}
-
+<style scoped>
 .find-place {
   position: absolute;
-  display: flex;
-  flex-direction: column;
-  top: 8px;
-  left: 50%;
-
-  transform: translateX(-50%) translateY(0);
-  transition-timing-function: ease-out;
-  transition-property: top left transform;
-  transition-duration: 0.2s;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .find-place.centered {
   top: 50%;
   left: 50%;
-  transform: translateX(-50%) translateY(-143px);
+  right: auto;
+  transform: translate(-50%, -50%);
+  max-width: 600px;
+  width: 100%;
 }
-.load-padding {
-  padding-left: 16px;
+
+.site-header {
+  font-size: 48px;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
 }
+
 .description {
-  padding: 8px;
-  margin: 0;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  margin-bottom: 32px;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+}
+
+.search-box {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.query-input {
+  flex: 1;
+  padding: 16px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+}
+
+.query-input:focus {
+  outline: none;
+  background: white;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+}
+
+.search-submit {
+  padding: 16px 32px;
+  background: #4A90E2;
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(74, 144, 226, 0.3);
+}
+
+.search-submit:hover {
+  background: #357ABD;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 30px rgba(74, 144, 226, 0.4);
+}
+
+.message {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.suggestions ul {
+  list-style: none;
+  margin-top: 16px;
+}
+
+.suggestions li {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.suggestions li:last-child {
+  border-bottom: none;
+}
+
+.suggestion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  color: #333;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.suggestion:hover {
+  color: #4A90E2;
+  padding-left: 8px;
+}
+
+.type-badge {
+  background: rgba(74, 144, 226, 0.1);
+  color: #4A90E2;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.prompt {
+  color: #666;
+  font-size: 14px;
+}
+
+.no-results, .error {
+  color: #666;
   text-align: center;
 }
 
-.cancel-request {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  font-size: 12px;
+.error {
+  background: rgba(255, 107, 107, 0.1);
+  color: #E74C3C;
 }
-.error-links {
+
+.loading {
+  text-align: center;
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
-@media (max-width: small-screen) {
-  .find-place {
-    width: 100%;
-  }
-  .find-place.centered {
-    top: 8px;
-    left: 0;
-    transform: none;
-  }
-  .message {
-    font-size: 12px;
-  }
-  .prompt {
-    font-size: 12px;
-    .note {
-      font-size: 9px;
-    }
-  }
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(74, 144, 226, 0.3);
+  border-top-color: #4A90E2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .site-header {
+    font-size: 36px;
+  }
+  
+  .description {
+    font-size: 16px;
+  }
+  
+  .search-box {
+    flex-direction: column;
+  }
+}
 </style>

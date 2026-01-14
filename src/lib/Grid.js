@@ -14,6 +14,7 @@ export default class Grid {
     this.name = '';
     this.isArea = true;
     this.projector = undefined;
+    this.markerLocation = null; // Optional marker coordinates {lat, lon}
   }
 
   setName(name) {
@@ -30,6 +31,10 @@ export default class Grid {
 
   setBBox(bboxString) {
     this.bboxString = bboxString;
+  }
+
+  setMarkerLocation(lat, lon) {
+    this.markerLocation = {lat, lon};
   }
 
   hasRoads() {

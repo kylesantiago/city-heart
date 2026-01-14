@@ -2,47 +2,80 @@ import request from './request.js';
 
 let cachedResults = new Map();
 
+// Mapbox configuration
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_GEOCODING_API = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
+
+export { MAPBOX_TOKEN }; // Export for use in other modules
+
 export default function findBoundaryByName(inputName) {
   let results = cachedResults.get(inputName);
   if (results) return Promise.resolve(results);
 
   let name = encodeURIComponent(inputName);
-  return request(`https://nominatim.openstreetmap.org/search?format=json&q=${name}`, {responseType: 'json'})
-      .then(extractBoundaries)
-      .then(x => {
-        cachedResults.set(inputName, x);
-        return x;
-      });
+  
+  // Use Mapbox Geocoding API
+  return request(`${MAPBOX_GEOCODING_API}/${name}.json?access_token=${MAPBOX_TOKEN}&types=place,address,locality,region`, {
+    responseType: 'json'
+  })
+    .then(extractFromMapbox)
+    .then(x => {
+      cachedResults.set(inputName, x);
+      return x;
+    });
 }
 
-function extractBoundaries(x) {
-  let areas = x.map(row => {
-      let areaId, bbox;
-      if (row.osm_type === 'relation') {
-        areaId = row.osm_id + 36e8;
-      } else if (row.osm_type === 'way') {
-        areaId = row.osm_id + 24e8;
-      }
-      if (row.boundingbox) {
-        bbox = [
-          Number.parseFloat(row.boundingbox[0]),
-          Number.parseFloat(row.boundingbox[2]),
-          Number.parseFloat(row.boundingbox[1]),
-          Number.parseFloat(row.boundingbox[3]),
-        ];
-      }
-
-      return {
-        areaId,
-        bbox,
-        lat: row.lat,
-        lon: row.lon,
-        osmId: row.osm_id,
-        osmType: row.osm_type,
-        name: row.display_name,
-        type: row.type,
-      };
-    });
-
-  return areas;
+function extractFromMapbox(mapboxResponse) {
+  if (!mapboxResponse.features || mapboxResponse.features.length === 0) {
+    return [];
+  }
+  
+  return mapboxResponse.features.map(feature => {
+    // Mapbox bbox format: [west, south, east, north]
+    const bbox = feature.bbox ? {
+      west: feature.bbox[0],
+      south: feature.bbox[1],
+      east: feature.bbox[2],
+      north: feature.bbox[3]
+    } : null;
+    
+    // Extract city name from context (for addresses)
+    let cityName = null;
+    let regionName = null;
+    
+    if (feature.context) {
+      const placeContext = feature.context.find(c => c.id.startsWith('place'));
+      const regionContext = feature.context.find(c => c.id.startsWith('region'));
+      
+      cityName = placeContext?.text;
+      regionName = regionContext?.text;
+    }
+    
+    // Determine type
+    const placeType = feature.place_type?.[0] || 'unknown';
+    const isAddress = placeType === 'address' || placeType === 'poi';
+    const isPlace = ['place', 'locality', 'region', 'district'].includes(placeType);
+    
+    return {
+      // Mapbox-specific data
+      mapboxId: feature.id,
+      center: feature.center, // [lng, lat]
+      lng: feature.center[0],
+      lat: feature.center[1],
+      bbox: bbox,
+      
+      // Display info
+      name: feature.place_name,
+      placeName: feature.text,
+      type: placeType,
+      
+      // Context
+      cityName: cityName,
+      regionName: regionName,
+      
+      // Flags
+      isAddress: isAddress,
+      isPlace: isPlace
+    };
+  });
 }
