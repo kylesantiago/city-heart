@@ -1,10 +1,12 @@
 import request from './request.js';
 
 let cachedResults = new Map();
+let boundaryCache = new Map();
 
 // Mapbox configuration
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const MAPBOX_GEOCODING_API = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
+const NOMINATIM_API = 'https://nominatim.openstreetmap.org';
 
 export { MAPBOX_TOKEN }; // Export for use in other modules
 
@@ -13,7 +15,7 @@ export default function findBoundaryByName(inputName) {
   if (results) return Promise.resolve(results);
 
   let name = encodeURIComponent(inputName);
-  
+
   // Use Mapbox Geocoding API
   return request(`${MAPBOX_GEOCODING_API}/${name}.json?access_token=${MAPBOX_TOKEN}&types=place,address,locality,region`, {
     responseType: 'json'
@@ -23,6 +25,45 @@ export default function findBoundaryByName(inputName) {
       cachedResults.set(inputName, x);
       return x;
     });
+}
+
+// Fetch actual boundary geometry from OpenStreetMap
+export async function fetchBoundaryGeometry(placeName) {
+  // Check cache first
+  if (boundaryCache.has(placeName)) {
+    return boundaryCache.get(placeName);
+  }
+
+  try {
+    // Search for the place to get OSM ID
+    const searchUrl = `${NOMINATIM_API}/search?q=${encodeURIComponent(placeName)}&format=json&polygon_geojson=1&limit=1`;
+    const searchResults = await request(searchUrl, {
+      responseType: 'json',
+      headers: {
+        'User-Agent': 'CityHeart/1.0'
+      }
+    });
+
+    if (!searchResults || searchResults.length === 0) {
+      console.warn('No boundary found for:', placeName);
+      return null;
+    }
+
+    const result = searchResults[0];
+
+    // Check if we got a polygon
+    if (result.geojson && (result.geojson.type === 'Polygon' || result.geojson.type === 'MultiPolygon')) {
+      const boundary = result.geojson;
+      boundaryCache.set(placeName, boundary);
+      return boundary;
+    }
+
+    console.warn('No polygon geometry found for:', placeName);
+    return null;
+  } catch (error) {
+    console.error('Error fetching boundary:', error);
+    return null;
+  }
 }
 
 function extractFromMapbox(mapboxResponse) {

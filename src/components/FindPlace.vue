@@ -186,17 +186,27 @@ export default {
       console.log('=== EMIT LOCATION ===');
       console.log('Location:', location);
       console.log('Options:', options);
-      
+
       this.loading = null;
-      
+
+      // For boundary fetching, use placeName (city name) if it's a place,
+      // or extract city from full name if it's an address
+      let boundaryName = location.name;
+      if (location.isPlace && location.placeName) {
+        boundaryName = location.placeName; // Use just the city name
+      } else if (location.cityName) {
+        boundaryName = location.cityName; // Use extracted city name for addresses
+      }
+
       const payload = {
-        name: location.name,
+        name: boundaryName, // This will be used to fetch the boundary
+        displayName: location.name, // Full name for display
         lng: location.lng,
         lat: location.lat,
         bbox: location.bbox,
         ...options
       };
-      
+
       console.log('Emitting payload:', payload);
       this.$emit('loaded', payload);
     }
